@@ -70,6 +70,10 @@ input:focus,select:focus{box-shadow:0 0 0 3px var(--yellow)}
   border-radius:14px;box-shadow:var(--sh);padding:4px 0 0;line-height:1.1;cursor:pointer}
 .plist{display:flex;flex-direction:column;gap:6px}
 .prow{display:flex;align-items:center;gap:8px;padding:6px 8px;border:3px solid var(--ink);border-radius:12px;background:#f4f3ff}
+.av{position:relative;flex:none;width:28px;height:28px;border-radius:50%;background:var(--c);border:2.5px solid var(--c);box-shadow:0 0 0 2px var(--ink);
+  overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:var(--ink);line-height:1}
+.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;background:#fff}
+.chip .av{width:24px;height:24px;font-size:12px}
 .prow .dot{width:22px;height:22px;border-radius:50%;background:var(--c);border:3px solid var(--ink);flex:none}
 .prow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prow img{width:26px;height:26px;border-radius:50%;border:2px solid var(--ink)}
@@ -147,7 +151,7 @@ input:focus,select:focus{box-shadow:0 0 0 3px var(--yellow)}
   .chip{font-size:12.5px;padding:3px 5px;gap:4px;height:36px}
   .ib{width:36px;height:36px;font-size:16px}
 }
-@media (max-width:420px){ .chip .dot{display:none} #bRules{display:none} }
+@media (max-width:420px){ .chip .dot{display:none} .chip .av{width:20px;height:20px} #bRules{display:none} }
 
 /* ---------- plateau ---------- */
 .board{position:relative;flex:none;--pc:#ffd426}
@@ -200,7 +204,8 @@ input:focus,select:focus{box-shadow:0 0 0 3px var(--yellow)}
 .pawn{position:absolute;left:0;top:0;width:0;height:0;transition:transform .14s ease-out,opacity .35s}
 .board.pushing .pawn{transition:transform .5s cubic-bezier(.5,0,.2,1.15),opacity .4s}
 .pawn::after{content:"";position:absolute;width:calc(var(--u)*.42);height:calc(var(--u)*.13);left:calc(var(--u)*-.21);top:calc(var(--u)*.1);border-radius:50%;background:rgba(0,0,0,.35)}
-.pawn .pb{position:absolute;z-index:1;width:calc(var(--u)*.5);height:calc(var(--u)*.5);left:calc(var(--u)*-.25);top:calc(var(--u)*-.33);border-radius:50% 50% 46% 46%;
+.pawn .pb img{position:absolute;inset:calc(var(--u)*.035);width:calc(100% - var(--u)*.07);height:calc(100% - var(--u)*.07);border-radius:50%;object-fit:cover;background:#fff}
+.pawn .pb{position:absolute;z-index:1;width:calc(var(--u)*.56);height:calc(var(--u)*.56);left:calc(var(--u)*-.28);top:calc(var(--u)*-.38);border-radius:50% 50% 46% 46%;
   background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.75) 0 16%,transparent 17%),var(--c);border:2.5px solid var(--ink);box-shadow:0 3px 0 var(--ink);
   display:flex;align-items:center;justify-content:center;font-size:calc(var(--u)*.23);font-weight:900;color:var(--ink);line-height:1}
 .pawn.cur{z-index:2}
@@ -301,7 +306,6 @@ input:focus,select:focus{box-shadow:0 0 0 3px var(--yellow)}
     </div>
     <div id="lobWait" class="note"></div>
     <div class="row" style="justify-content:space-between"><button id="lobLeave" class="btn w">← Quitter</button><button id="lobStart" class="btn">Lancer la partie 🚀</button></div>
-    <button id="lobInvite" class="btn sm w" hidden>📣 Poster l'invit' sur Discord</button>
   </div></div>
 </section>
 
@@ -355,6 +359,11 @@ const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a
 const clone=o=>JSON.parse(JSON.stringify(o));
 const rid=()=>Math.random().toString(36).slice(2,10);
 const mk=(tag,cls,parent)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(parent)parent.appendChild(e);return e};
+const AV={}; // id joueur -> URL de sa photo de profil
+const okUrl=u=>typeof u==='string'&&/^https?:\/\//i.test(u)&&u.length<600?u:null;
+const avOf=p=>p&&!p.bot?okUrl(p.av)||AV[p.id]||null:null;
+const ini=p=>p.bot?'🤖':((p.name||'?').trim()[0]||'?').toUpperCase();
+const avHTML=(p,c)=>{const u=avOf(p);return `<span class="av" style="--c:${c}"><b>${esc(ini(p))}</b>${u?`<img src="${esc(u)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`:''}</span>`};
 const SPEED=/[?&]turbo/.test(location.search)?0.15:1;
 const HOVER=matchMedia('(hover: hover) and (pointer: fine)').matches;
 
@@ -407,7 +416,7 @@ function makeGame(specs,perSetting){
   const n=specs.length;const seats=n===2?[0,2]:[0,1,2,3].slice(0,n);
   const {board,extra}=genBoard();const deck=shuffle([...Array(24).keys()]);
   const mx=Math.floor(24/n);const per=perSetting==='max'?mx:Math.min(+perSetting||5,mx);
-  const players=specs.map((sp,i)=>({id:sp.id,name:String(sp.name||'Joueur').slice(0,16),bot:!!sp.bot,seat:seats[i],
+  const players=specs.map((sp,i)=>({id:sp.id,name:String(sp.name||'Joueur').slice(0,16),bot:!!sp.bot,seat:seats[i],av:sp.bot?null:okUrl(sp.av),
     home:SEATS[seats[i]].home.slice(),pos:SEATS[seats[i]].home.slice(),cards:deck.slice(i*per,(i+1)*per),found:0}));
   const turn=Math.random()*n|0;
   const g={gid:rid(),t0:Date.now(),v:1,phase:'play',board,extra,players,turn,step:'push',forbid:null,last:null,log:[],winner:-1,turnNo:1,per};
@@ -645,7 +654,11 @@ class BoardView{
   }
   pawnEl(i,p){
     let el=this.pawns[i];if(!el){el=mk('div','pawn',this.pl);el.innerHTML='<div class="pb"><span></span></div>';this.pawns[i]=el}
-    el.style.setProperty('--c',SEATS[p.seat].c);const ini=p.bot?'🤖':(p.name.trim()[0]||'?').toUpperCase();const sp=el.querySelector('span');if(sp.textContent!==ini)sp.textContent=ini;return el;
+    el.style.setProperty('--c',SEATS[p.seat].c);const t=ini(p);const sp=el.querySelector('span');if(sp.textContent!==t)sp.textContent=t;
+    const u=avOf(p),pb=el.firstChild;let im=pb.querySelector('img');
+    if(u&&(!im||im.dataset.u!==u)){if(!im){im=mk('img','',pb);im.alt='';im.referrerPolicy='no-referrer';im.onerror=()=>im.remove()}im.dataset.u=u;im.src=u}
+    else if(!u&&im)im.remove();
+    return el;
   }
   pawnXY(g,i,pos){
     const same=[];g.players.forEach((q,j)=>{if(q.pos[0]===pos[0]&&q.pos[1]===pos[1])same.push(j)});const k=Math.max(0,same.indexOf(i)),n=same.length;
@@ -821,7 +834,7 @@ function turnFx(old,ns){
 /* ---------- interface ---------- */
 function refreshInteract(){if(G&&view&&!pending)updateUI(G);else if(view){view.root.classList.remove('canpush');$('#stayBtn').hidden=true}}
 function updateUI(g){
-  if(!g||!view)return;
+  if(!g||!view)return;if(g===G)noteTurn(g);
   renderChips(g);renderExtra(g);renderTarget(g);renderTurn(g);renderLog(g);
   const act=canAct()&&g===G;
   view.root.classList.toggle('canpush',act&&g.step==='push');
@@ -833,7 +846,7 @@ function updateUI(g){
   if(armed&&act&&g.step==='push'){const [s,i]=armed.split(':');view.showGhost(s,+i,g.extra)}
   $('#stayBtn').hidden=!(act&&g.step==='move');
   const cur=g.players[g.turn];
-  $('#skipBtn').hidden=!(mode==='online'&&isHost()&&g.phase==='play'&&!cur.bot&&!online(cur.id)&&!pending);
+  updateSkip(g);
   $('#rotL').disabled=$('#rotR').disabled=!(act&&g.step==='push');
   $('#extraTile').classList.toggle('lock',!(act&&g.step==='push'));
   $('#specTag').hidden=!(mode==='online'&&vi<0);
@@ -842,7 +855,7 @@ function renderChips(g){
   const mx=Math.max(...g.players.map(p=>p.found));
   $('#chips').innerHTML=g.players.map((p,i)=>{const done=p.found>=p.cards.length;
     return `<div class="chip${i===g.turn&&g.phase==='play'?' cur':''}${mode==='online'&&!p.bot&&!online(p.id)?' off':''}" style="--c:${SEATS[p.seat].c}" title="${esc(p.name)}">
-      ${mx>0&&p.found===mx?'<span class="crown">👑</span>':''}<span class="dot"></span><span class="nm">${p.bot?'🤖 ':''}${esc(p.name)}</span>
+      ${mx>0&&p.found===mx?'<span class="crown">👑</span>':''}${avHTML(p,SEATS[p.seat].c)}<span class="nm">${p.bot?'🤖 ':''}${esc(p.name)}</span>
       <span class="sc">${done?'🏠':'💎'}${p.found}/${p.cards.length}</span></div>`}).join('');
 }
 function renderExtra(g){
@@ -867,6 +880,9 @@ function renderTurn(g){
   if(g.phase==='end'){const w=g.players[g.winner];$('#turnName').innerHTML=`🏆 ${esc(w.name)} a gagné !`;$('#turnHint').textContent='Partie terminée';return}
   const mine=canAct()||(pending&&(mode==='local'?!p.bot:p.id===myId));
   $('#turnName').innerHTML=mine?(mode==='online'?'<b>À toi de jouer !</b>':`<b>À toi, ${esc(p.name)} !</b>`):`Tour de <b>${esc(p.name)}</b>`;
+  const left=mode==='online'&&!p.bot?afkLeft():99;
+  if(left<=20&&online(p.id)){$('#turnHint').textContent=mine?(left?`⏳ Bouge-toi ! On pourra passer ton tour dans ${left}s`:'⏳ Tu es AFK : les autres peuvent passer ton tour !')
+    :(left?`⏳ ça traîne… passage possible dans ${left}s`:'💤 est AFK, tu peux passer son tour');return}
   $('#turnHint').textContent=mine?(g.step==='push'?'① Tourne la tuile, puis pousse-la avec une flèche':'② Clique une case lumineuse (ou reste ici)')
     :p.bot?'🤖 réfléchit très fort…':(mode==='online'&&!online(p.id))?'😴 est déconnecté…':g.step==='push'?'pousse une tuile…':'se déplace…';
 }
@@ -898,7 +914,24 @@ function onTile(id){
 function stay(){if(!canAct()||G.step!=='move')return;const p=G.players[G.turn];commit(doMoveState(G,p.pos[0],p.pos[1]))}
 $('#stayBtn').onclick=stay;
 $('#rotL').onclick=()=>rotateExtra(-1);$('#rotR').onclick=()=>rotateExtra(1);$('#extraTile').onclick=()=>rotateExtra(1);
-$('#skipBtn').onclick=()=>{if(G&&isHost()&&G.phase==='play'&&!pending)commit(doSkipState(G))};
+/* ---------- joueur AFK / déconnecté : bouton pour passer son tour ---------- */
+const AFK_SEC=60; // secondes sans rien faire avant de pouvoir passer le tour de quelqu'un
+let turnSince=Date.now(),turnKey='';
+function noteTurn(g){const k=g.gid+':'+g.turnNo+':'+g.step;if(k!==turnKey){turnKey=k;turnSince=Date.now()}}
+function afkLeft(){return Math.max(0,AFK_SEC-Math.floor((Date.now()-turnSince)/1000))}
+// l'« arbitre » = le premier joueur connecté qui n'est pas celui qui doit jouer (un seul bouton actif = pas de conflit)
+function arbiter(g){const cur=g.players[g.turn];const a=roomPlayers.find(p=>p.id!==cur.id);return a?a.id:null}
+function skipReason(g){
+  if(mode!=='online'||!g||g.phase!=='play'||pending)return null;const cur=g.players[g.turn];if(cur.bot)return null;
+  if(!online(cur.id))return 'off';if(afkLeft()<=0)return 'afk';return null;
+}
+function updateSkip(g){
+  const r=skipReason(g);const b=$('#skipBtn');b.hidden=!(r&&arbiter(g)===myId);
+  b.textContent=r==='afk'?'⏭ Passer (AFK)':'⏭ Passer';
+}
+$('#skipBtn').onclick=()=>{if(G&&skipReason(G)&&arbiter(G)===myId){const cur=G.players[G.turn];const ns=doSkipState(G);
+  ns.log[ns.log.length-1]=`💤 ${cur.name} ${skipReason(G)==='afk'?'est AFK':'est déconnecté'} : tour passé.`;commit(ns)}};
+setInterval(()=>{if(mode==='online'&&G&&G.phase==='play'&&view&&!pending){renderTurn(G);updateSkip(G)}},1000);
 addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='r'||e.key==='R')rotateExtra(1);if(e.key==='Escape')closeModal()});
 const REACTS=['😂','🔥','😱','👏','😈','💀'];
 $('#reacts').innerHTML=REACTS.map(r=>`<button>${r}</button>`).join('');
@@ -930,7 +963,7 @@ function showEnd(g,fx){
   setTimeout(()=>{
     if(!G||G.gid!==g.gid)return;
     openModal(`<div class="winC">👑</div><div class="winT" style="color:${c};-webkit-text-stroke:2px var(--ink);text-shadow:3px 3px 0 var(--ink)">${mine?'TU AS GAGNÉ !':esc(w.name)+' gagne !'}</div>
-      <div class="rank">${rk.map((x,k)=>`<div class="prow" style="--c:${SEATS[x.p.seat].c}"><b>${medals[k]}</b><span class="dot"></span><span class="nm">${x.p.bot?'🤖 ':''}${esc(x.p.name)}</span><span>💎 ${x.p.found}/${x.p.cards.length}</span></div>`).join('')}</div>
+      <div class="rank">${rk.map((x,k)=>`<div class="prow" style="--c:${SEATS[x.p.seat].c}"><b>${medals[k]}</b>${avHTML(x.p,SEATS[x.p.seat].c)}<span class="nm">${x.p.bot?'🤖 ':''}${esc(x.p.name)}</span><span>💎 ${x.p.found}/${x.p.cards.length}</span></div>`).join('')}</div>
       ${host?`<div class="row" style="justify-content:space-between"><button class="btn w" id="endMenu">${mode==='online'?'🛋️ Salon':'🏠 Menu'}</button><button class="btn" id="endAgain">🔁 Revanche !</button></div>`
         :`<div class="note">En attente de l'hôte pour la revanche…</div><button class="btn w" id="endMenu">🚪 Quitter</button>`}`,false);
     const a=$('#endAgain');if(a)a.onclick=()=>{closeModal();rematch()};
@@ -984,7 +1017,7 @@ $('#bLocal').onclick=()=>{sfx.click();lsSet('laby-name',myName());
   $('#locPer').value=localSetup.per;renderLocal();show('local')};
 $('#locStart').onclick=()=>{
   localSetup.per=$('#locPer').value;
-  const specs=localSetup.players.map((p,i)=>({id:'p'+i,name:(p.name||'').trim()||(p.bot?'Bot':'Joueur '+(i+1)),bot:p.bot}));
+  const specs=localSetup.players.map((p,i)=>({id:'p'+i,name:(p.name||'').trim()||(p.bot?'Bot':'Joueur '+(i+1)),bot:p.bot,av:i===0&&!p.bot?me.avatar:null}));
   mode='local';G=null;const g=makeGame(specs,localSetup.per);receiveState(g);saveLocal();
 };
 $('#bResume').onclick=()=>{try{const s=JSON.parse(lsGet('laby-local'));mode='local';G=null;receiveState(s)}catch(e){toast('😬 Sauvegarde illisible');lsSet('laby-local',null);checkResume()}};
@@ -1002,11 +1035,11 @@ function joinRoom(code,create){
   $('#lobCode').textContent=code;$('#lobList').innerHTML='<div class="note">Connexion à la salle…</div>';$('#lobWait').textContent='';$('#lobHost').hidden=true;$('#lobStart').hidden=true;show('lobby');
   try{room=ChadGang.join(code,{create:!!create})}catch(e){toast('😬 Impossible de rejoindre : '+e.message);mode=null;show('home');return}
   const r=room;
-  r.on('ready',info=>{if(room!==r)return;myId=info.me;roomPlayers=info.players||[];
+  r.on('ready',info=>{if(room!==r)return;myId=info.me;roomPlayers=info.players||[];learnAv(roomPlayers);if(okUrl(me.avatar))AV[myId]=me.avatar;sayHi();
     let last=info.last;if(last&&!last.t&&last.data)last=last.data;
     if(last&&last.t==='state'&&last.s)receiveState(last.s);
     else{if(last&&last.t==='lobby'&&last.cfg)lobbyCfg=last.cfg;showLobby();if(isHost())send({t:'lobby',cfg:lobbyCfg},true)}});
-  r.on('players',l=>{if(room!==r)return;const before=roomPlayers;roomPlayers=l||[];onPlayers(before)});
+  r.on('players',l=>{if(room!==r)return;const before=roomPlayers;roomPlayers=l||[];learnAv(roomPlayers);if(roomPlayers.some(p=>!before.some(q=>q.id===p.id)))sayHi();onPlayers(before)});
   r.on('message',(d,from)=>{if(room!==r)return;onMsg(d,from||{})});
   r.on('error',m=>{if(room!==r)return;toast('😬 '+(typeof m==='string'?m:'Salle introuvable ou pleine'),3500);leaveRoom();mode=null;G=null;show('home')});
 }
@@ -1017,8 +1050,12 @@ function onPlayers(before){
   if(!G||$('#scr-lobby').classList.contains('on')){showLobby();if(isHost()&&!G)send({t:'lobby',cfg:lobbyCfg},true)}
   else if(view){if(!pending)updateUI(G);maybeBot()}
 }
+function learnAv(list){(list||[]).forEach(p=>{const u=okUrl(p.avatar);if(u)AV[p.id]=u})}
+let hiT=0;function sayHi(){clearTimeout(hiT);hiT=setTimeout(()=>{if(room&&okUrl(me.avatar))send({t:'hi',av:me.avatar})},300+Math.random()*500)}
 function onMsg(d,from){
   if(!d||typeof d!=='object')return;
+  if(d.t==='hi'){const u=okUrl(d.av);if(u&&from.id&&AV[from.id]!==u){AV[from.id]=u;if(G&&view&&!pending){view.renderPawns(G);updateUI(G)}else if(!G)showLobby()}return}
+  if(from.id&&G&&G.phase==='play'&&(d.t==='rot'||d.t==='hov')&&G.players[G.turn].id===from.id)turnSince=Date.now();
   if(d.t==='state')receiveState(d.s);
   else if(d.t==='lobby'){if(from.id===myId)return;lobbyCfg=d.cfg||lobbyCfg;if(G&&G.phase==='play')return;G=null;closeModal();showLobby()}
   else if(d.t==='react'){if(from.id!==myId){floatReact(d.e,from.name);sfx.pop()}}
@@ -1032,12 +1069,11 @@ function effBots(){return Math.max(0,Math.min(lobbyCfg.bots|0,4-lobbyHumans().le
 function showLobby(){
   if(mode!=='online')return;show('lobby');
   const host=isHost();const hs=lobbyHumans();const nb=effBots();
-  const rows=roomPlayers.map((p,i)=>{const seat=i<4?SEATS[i<4?i:0].c:'#ccc';return `<div class="prow${i>=4?' spec':''}" style="--c:${seat}"><span class="dot"></span>
+  const rows=roomPlayers.map((p,i)=>{const seat=i<4?SEATS[i<4?i:0].c:'#ccc';return `<div class="prow${i>=4?' spec':''}" style="--c:${seat}">${avHTML(p,seat)}
       <span class="nm">${esc(p.name)}${p.id===myId?' <span class="tag2">(toi)</span>':''}</span>${i===0?'<span>👑 hôte</span>':i>=4?'<span class="tag2">spectateur</span>':''}</div>`});
   for(let k=0;k<nb;k++)rows.push(`<div class="prow" style="--c:${SEATS[hs.length+k]?SEATS[hs.length+k].c:'#ccc'}"><span class="dot"></span><span class="nm">🤖 ${BOTN[k]}</span><span class="tag2">bot</span></div>`);
   $('#lobList').innerHTML=rows.join('')||'<div class="note">Connexion…</div>';
   $('#lobHost').hidden=!host;$('#lobStart').hidden=!host;$('#botN').textContent=nb;$('#lobPer').value=lobbyCfg.per||'5';
-  $('#lobInvite').hidden=!(host&&ChadGang.createInvite);
   const total=hs.length+nb;$('#lobStart').disabled=total<2;
   const perTxt=$('#lobPer').selectedOptions[0]?$('#lobPer').selectedOptions[0].textContent:'';
   $('#lobWait').textContent=host?(total<2?'Ajoute un bot ou attends un pote pour lancer 😉':`${total} joueurs prêts. Max 4 joueurs, les suivants regardent.`)
@@ -1050,10 +1086,9 @@ $('#lobPer').onchange=()=>{lobbyCfg.per=$('#lobPer').value;setCfg()};
 $('#lobLeave').onclick=()=>{sfx.click();leaveRoom();mode=null;show('home')};
 $('#lobStart').onclick=()=>{sfx.click();startOnline()};
 $('#lobCode').onclick=()=>{try{navigator.clipboard.writeText(roomCode);toast('📋 Code copié !')}catch(e){}};
-$('#lobInvite').onclick=async()=>{try{await ChadGang.createInvite({room:roomCode,message:'Venez vous perdre dans le Labyrinthe ! 🗝️'});toast('📣 Invitation postée sur Discord !')}catch(e){toast("😬 L'invit' n'est pas partie")}};
 function startOnline(){
   if(!isHost())return;const hs=lobbyHumans();const nb=effBots();if(hs.length+nb<2){toast('Il faut au moins 2 joueurs (ajoute un bot 🤖)');return}
-  const specs=hs.map(p=>({id:p.id,name:p.name})).concat(Array.from({length:nb},(_,k)=>({id:'bot'+k,name:BOTN[k],bot:true})));
+  const specs=hs.map(p=>({id:p.id,name:p.name,av:AV[p.id]||p.avatar})).concat(Array.from({length:nb},(_,k)=>({id:'bot'+k,name:BOTN[k],bot:true})));
   shuffle(specs);commit(makeGame(specs,lobbyCfg.per||'5'));
 }
 $('#bCreate').onclick=()=>{sfx.click();if(!hasSDK)return;joinRoom(genCode(),true)};
