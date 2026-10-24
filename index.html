@@ -363,7 +363,8 @@ const AV={}; // id joueur -> URL de sa photo de profil
 const okUrl=u=>typeof u==='string'&&/^https?:\/\//i.test(u)&&u.length<600?u:null;
 const avOf=p=>p&&!p.bot?okUrl(p.av)||AV[p.id]||null:null;
 const ini=p=>p.bot?'🤖':((p.name||'?').trim()[0]||'?').toUpperCase();
-const avHTML=(p,c)=>{const u=avOf(p);return `<span class="av" style="--c:${c}"><b>${esc(ini(p))}</b>${u?`<img src="${esc(u)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`:''}</span>`};
+const cgId=p=>p&&!p.bot&&mode==='online'&&p.id?` data-chadgang-id="${esc(p.id)}"`:'';
+const avHTML=(p,c)=>{const u=avOf(p);return `<span class="av" style="--c:${c}"${cgId(p)}><b>${esc(ini(p))}</b>${u?`<img src="${esc(u)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`:''}</span>`};
 const SPEED=/[?&]turbo/.test(location.search)?0.15:1;
 const HOVER=matchMedia('(hover: hover) and (pointer: fine)').matches;
 
@@ -412,14 +413,14 @@ function pathTo(seen,k){const p=[];while(k!==-1&&k!==undefined){p.push([k/7|0,k%
 function addLog(s,txt){s.log.push(txt);if(s.log.length>30)s.log.splice(0,s.log.length-30)}
 function goalIdx(g,i){const p=g.players[i];if(p.found>=p.cards.length)return p.home[0]*7+p.home[1];const t=p.cards[p.found];return g.board.findIndex(x=>x[3]===t)}
 
-function makeGame(specs,perSetting){
+function makeGame(specs,perSetting,pid){
   const n=specs.length;const seats=n===2?[0,2]:[0,1,2,3].slice(0,n);
   const {board,extra}=genBoard();const deck=shuffle([...Array(24).keys()]);
   const mx=Math.floor(24/n);const per=perSetting==='max'?mx:Math.min(+perSetting||5,mx);
   const players=specs.map((sp,i)=>({id:sp.id,name:String(sp.name||'Joueur').slice(0,16),bot:!!sp.bot,seat:seats[i],av:sp.bot?null:okUrl(sp.av),
     home:SEATS[seats[i]].home.slice(),pos:SEATS[seats[i]].home.slice(),cards:deck.slice(i*per,(i+1)*per),found:0}));
   const turn=Math.random()*n|0;
-  const g={gid:rid(),t0:Date.now(),v:1,phase:'play',board,extra,players,turn,step:'push',forbid:null,last:null,log:[],winner:-1,turnNo:1,per};
+  const g={gid:rid(),pid:pid||null,t0:Date.now(),v:1,phase:'play',board,extra,players,turn,step:'push',forbid:null,last:null,log:[],winner:-1,turnNo:1,per};
   addLog(g,`🏁 La chasse commence ! ${per} trésor${per>1?'s':''} chacun.`);
   addLog(g,`🎲 ${players[turn].name} ouvre le bal.`);
   return g;
@@ -656,6 +657,7 @@ class BoardView{
     let el=this.pawns[i];if(!el){el=mk('div','pawn',this.pl);el.innerHTML='<div class="pb"><span></span></div>';this.pawns[i]=el}
     el.style.setProperty('--c',SEATS[p.seat].c);const t=ini(p);const sp=el.querySelector('span');if(sp.textContent!==t)sp.textContent=t;
     const u=avOf(p),pb=el.firstChild;let im=pb.querySelector('img');
+    if(!p.bot&&mode==='online'&&p.id)pb.setAttribute('data-chadgang-id',p.id);else pb.removeAttribute('data-chadgang-id');
     if(u&&(!im||im.dataset.u!==u)){if(!im){im=mk('img','',pb);im.alt='';im.referrerPolicy='no-referrer';im.onerror=()=>im.remove()}im.dataset.u=u;im.src=u}
     else if(!u&&im)im.remove();
     return el;
@@ -954,7 +956,19 @@ function maybeBot(){
 }
 
 /* ---------- fin de partie ---------- */
+/* ---------- résultat pour le classement « all time » du hub ---------- */
+function reportEnd(g){
+  if(mode!=='online'||!g||g.phase!=='end'||!g.pid||!/^[A-Za-z0-9\-_.:]{1,64}$/.test(g.pid))return;
+  const i=g.players.findIndex(p=>p.id===myId&&!p.bot);if(i<0)return; // spectateur : rien à envoyer
+  let sent=[];try{sent=JSON.parse(lsGet('laby-sent')||'[]')}catch(e){}
+  const key=g.pid+'|'+myId;if(sent.includes(key))return;
+  sent.push(key);lsSet('laby-sent',JSON.stringify(sent.slice(-50)));
+  if(window.ChadGang&&ChadGang.finPartie){
+    try{Promise.resolve(ChadGang.finPartie({gagne:i===g.winner,partie:g.pid,score:g.players[i].found})).catch(()=>{})}catch(e){}
+  }
+}
 function showEnd(g,fx){
+  reportEnd(g);
   const w=g.players[g.winner];const c=SEATS[w.seat].c;const mine=mode==='online'&&w.id===myId;
   if(fx){sfx.win();fireworks(5000);shake(true);banner(mine?'TU AS GAGNÉ !':'VICTOIRE !',`${esc(w.name)} est le roi du labyrinthe 👑`,c)}
   const rk=g.players.map((p,i)=>({p,i})).sort((a,b)=>(b.i===g.winner)-(a.i===g.winner)||b.p.found-a.p.found);
@@ -1089,7 +1103,9 @@ $('#lobCode').onclick=()=>{try{navigator.clipboard.writeText(roomCode);toast('�
 function startOnline(){
   if(!isHost())return;const hs=lobbyHumans();const nb=effBots();if(hs.length+nb<2){toast('Il faut au moins 2 joueurs (ajoute un bot 🤖)');return}
   const specs=hs.map(p=>({id:p.id,name:p.name,av:AV[p.id]||p.avatar})).concat(Array.from({length:nb},(_,k)=>({id:'bot'+k,name:BOTN[k],bot:true})));
-  shuffle(specs);commit(makeGame(specs,lobbyCfg.per||'5'));
+  shuffle(specs);
+  const pid=(String(roomCode||'SALLE')+'-'+Date.now().toString(36)).replace(/[^A-Za-z0-9\-_.:]/g,'').slice(0,64);
+  commit(makeGame(specs,lobbyCfg.per||'5',pid));
 }
 $('#bCreate').onclick=()=>{sfx.click();if(!hasSDK)return;joinRoom(genCode(),true)};
 $('#bJoin').onclick=()=>{sfx.click();if(!hasSDK)return;joinRoom($('#code').value,false)};
